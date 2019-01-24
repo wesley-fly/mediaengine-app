@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">WtkRTCSDK</string>
+    <string name="iax_server">IaxServer</string>
+    <string name="iax_port">IaxPort (4569)</string>
+    <string name="iax_user">UserName</string>
+    <string name="iax_pass">PassWord</string>
+    <string name="action_sign_in">Sign in</string>
+
+    <string name="sign_in_server">192.168.4.163</string>
+    <!--<string name="sign_in_server">13.58.242.38</string>-->
+    <string name="sign_in_port">4569</string>
+</resources>

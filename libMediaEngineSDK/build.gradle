@@ -1,0 +1,52 @@
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion 28
+    defaultConfig {
+        minSdkVersion 17
+        targetSdkVersion 27
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    productFlavors {
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.google.code.findbugs:jsr305:3.0.2'
+}
+buildscript {
+    repositories {
+        google()
+        jcenter()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:3.2.0'
+    }
+}
+task makeWtkMediaSDKJar(type: Copy){
+    delete 'build/libs/libWtkMediaSDK.jar'
+    from('build/intermediates/intermediate-jars/release/')
+    into('build/libs/')
+
+    include('classes.jar')
+
+    rename('classes.jar','libWtkMediaSDK.jar')
+}
+
+repositories {
+    google()
+}
+makeWtkMediaSDKJar.dependsOn(build)
