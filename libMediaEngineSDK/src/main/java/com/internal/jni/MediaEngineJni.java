@@ -12,15 +12,21 @@ public class MediaEngineJni {
 
     public native void SetDeviceInfo(String os, String mf, String md, String ov, int api);
 
+    public native int DeBindAppAccount();
+
     public native String BindAppAccount(String appId, String appPassWd);
 
-    public native void SetUserProfile(String profile, String jsonRS);
+    public native String QueryIdByAppAccount(String appAccountId);
 
     public native int SetParameter(String key, String value);
 
     public native String GetParameter(String key);
 
-    public native int ReceiveCallNotification(String callNotification);
+    public native String SendMessage(String dstId, String mimeType, String textContent, String filePath, String messageId);
+
+    public native String DownloadMessageAttachment(String messageId, int isThumbnail, String filePath);
+
+    public native String ReportMessageStatus(String dstId, String messageId, int status);
 
     public native String MakeCall(String dstID, String srcID, int media);
 
@@ -49,8 +55,6 @@ public class MediaEngineJni {
     public native int ListConference(String confID);
 
     public native int CtrlConference(String confID, int action, String dstID);
-
-    public native String GetServerCallID(String callID);
 
     public native int GetCallQualityLevel(String callID);
 }

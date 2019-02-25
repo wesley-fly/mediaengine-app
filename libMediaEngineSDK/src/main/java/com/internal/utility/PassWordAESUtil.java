@@ -17,7 +17,7 @@ public class PassWordAESUtil
      *            加密的字符串
      * @return 加密之后的字符串
      */
-    public static String encryptDatas(String mn, String data) {
+    public static String encryptData(String mn, String data) {
         return Base64.encodeToString(NewAESUtil.encryptDatasUseBase64(Md5Util.getMD5Bytes(mn + SALT), IV, data + SALT),
                 Base64.DEFAULT);
     }
@@ -32,7 +32,7 @@ public class PassWordAESUtil
      *            解密的字符串
      * @return 解密之后的字符串
      */
-    public static String decryptDatas(String mn, String data) {
+    public static String decryptData(String mn, String data) {
         return NewAESUtil.decryptDatas(Md5Util.getMD5Bytes(mn + SALT), IV,
                 Base64.decode(data.getBytes(), Base64.DEFAULT));
     }

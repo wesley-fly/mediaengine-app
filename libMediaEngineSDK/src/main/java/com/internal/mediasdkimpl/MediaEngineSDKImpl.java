@@ -10,10 +10,15 @@ import com.internal.jni.MediaEngineJni;
 import com.internal.jni.MediaEngineListenerJni;
 import com.internal.mediasdk.ConferenceCtrl;
 import com.internal.mediasdk.ErrorCode;
-import com.internal.mediasdk.EventListener;
+import com.internal.mediasdk.MediaEngineListenerSDK;
 import com.internal.mediasdk.MediaType;
 import com.internal.mediasdk.MediaEngineSDK;
-import com.internal.utility.PassWordAESUtil;
+import com.internal.mediasdk.MessageObjectType;
+import com.internal.mediasdk.MessageOfRead;
+import com.internal.mediasdk.MessageOfRec;
+import com.internal.mediasdk.MessageOneToOne;
+import com.internal.mediasdk.MessageStatus;
+import com.internal.mediasdk.MimeType;
 import com.internal.utility.RandomUtil;
 
 import org.json.JSONArray;
@@ -22,14 +27,16 @@ import org.json.JSONObject;
 import org.webrtc.ContextUtils;
 import org.webrtc.voiceengine.WebRtcAudioRecord;
 
+import java.io.File;
+
 public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineListenerJni {
     private String TAG = getClass().getSimpleName();
 
     private static MediaEngineSDKImpl singleInstance = null;
 
-    private static MediaEngineJni m_wtk_sdk_jni = null;
+    private static MediaEngineJni mediaEngineJni = null;
 
-    private static EventListener m_WtkSdkEventListener = null;
+    private static MediaEngineListenerSDK mediaEngineListenerSDK = null;
 
     public static MediaEngineSDKImpl getInstance()
     {
@@ -42,40 +49,54 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
 
     private MediaEngineSDKImpl()
     {
-        m_wtk_sdk_jni = new MediaEngineJni();
+        mediaEngineJni = new MediaEngineJni();
     }
 
     @Override
-    public synchronized boolean initialize(Context c, String AppKey, EventListener listener)
+    public synchronized boolean initialize(Context c, String AppKey, MediaEngineListenerSDK listener)
     {
-        m_WtkSdkEventListener = listener;
+        mediaEngineListenerSDK = listener;
 
         ContextUtils.initialize(c);
-        boolean isInitedOk = m_wtk_sdk_jni.Initialize(c, AppKey,this);
+        boolean isInitedOk = mediaEngineJni.Initialize(c, AppKey,this);
 
         if(isInitedOk)
         {
-            m_wtk_sdk_jni.SetDeviceInfo("android", Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE, Build.VERSION.SDK_INT);
+            mediaEngineJni.SetDeviceInfo("android", Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE, Build.VERSION.SDK_INT);
         }
         return isInitedOk;
+    }
+    @Override
+    public int deBindAppAccount()
+    {
+        return mediaEngineJni.DeBindAppAccount();
     }
     @Override
     public String bindAppAccount(String appId)
     {
         String appPassWd = RandomUtil.generatePassword(8);
-        String nm = "+8613812345678";
-        return m_wtk_sdk_jni.BindAppAccount(appId, PassWordAESUtil.encryptDatas(nm, appPassWd));
+//        String nm = "+8613812345678";
+//        String encPass = PassWordAESUtil.encryptData(nm, appPassWd);
+        Log.e(TAG, "appPassWd = " + appPassWd);
+        return mediaEngineJni.BindAppAccount(appId, appPassWd);
 
+    }
+    @Override
+    public String queryIdByAppAccount(String appAccountId)
+    {
+        String jsonResult = mediaEngineJni.QueryIdByAppAccount(appAccountId);
+
+        return jsonResult;
     }
     @Override
     public int setParameter(String key, String value)
     {
-        return m_wtk_sdk_jni.SetParameter(key, value);
+        return mediaEngineJni.SetParameter(key, value);
     }
     @Override
     public String getParameter(String key)
     {
-        String value = m_wtk_sdk_jni.GetParameter(key);
+        String value = mediaEngineJni.GetParameter(key);
         if(value!=null && value.length()>0)
         {
             return value;
@@ -86,30 +107,69 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
         }
     }
     @Override
-    public int receiveCallNotification(String callNotification)
+    public String sendMessage(String dstId, String mimeType, String textContent, String filePath, String messageId)
     {
-        if(0 == callNotification.length())
+        String retMsgId;
+        MimeType mt = MimeType.buildMimeType(mimeType);
+        if(mt.isFile())
         {
-            return ErrorCode.PARAM_ERROR;
+            File file = new File(filePath);
+            if(!file.exists() || !file.isFile() || !file.canRead())
+            {
+                Log.e(TAG,"检查文件不可被操作!");
+                return "";
+            }
+        }
+        if(filePath == null)
+        {
+            filePath = "";
+        }
+        if(messageId == null)
+        {
+            messageId = "";
+        }
+        if(textContent == null)
+        {
+            textContent = "";
         }
 
-        return m_wtk_sdk_jni.ReceiveCallNotification(callNotification);
+        retMsgId = mediaEngineJni.SendMessage(dstId,mimeType,textContent,filePath,messageId);
+
+        if(retMsgId != null && retMsgId.length() > 0)
+        {
+            return retMsgId;
+        }
+        else
+        {
+            return "";
+        }
     }
     @Override
-    public void setUserProfile(final String profile, final String jsonRS)
+    public String downloadMessageAttachment(String messageId, int isThumbnail, String filePath)
     {
-        if( 0 == profile.length() || 0 == jsonRS.length())
+        File file = new File(filePath);
+        String filePathStr = file.getParent();
+        File fileStr = new File(filePathStr);
+
+        if(!fileStr.exists())
         {
-            return;
+            fileStr.mkdirs();
         }
-        m_wtk_sdk_jni.SetUserProfile(profile, jsonRS);
+
+        return mediaEngineJni.DownloadMessageAttachment(messageId,isThumbnail,filePath);
     }
+    @Override
+    public String reportMessageStatus(String dstId, String messageId, int status)
+    {
+        return mediaEngineJni.ReportMessageStatus(dstId,messageId,status);
+    }
+
     @Override
     public String makeCall(String dstID, String srcID, int media)
     {
         if(media == MediaType.MEDIA_AUDIO || media == MediaType.MEDIA_VIDEO) {
 
-            String callId = m_wtk_sdk_jni.MakeCall(dstID, srcID, media);
+            String callId = mediaEngineJni.MakeCall(dstID, srcID, media);
 
             if (callId != null && callId.length() > 0) {
                 return callId;
@@ -130,7 +190,7 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
         {
             return ErrorCode.PARAM_ERROR;
         }
-        return m_wtk_sdk_jni.AnswerCall(callID);
+        return mediaEngineJni.AnswerCall(callID);
     }
     @Override
     public int holdCall(String callID, int hold)
@@ -140,7 +200,7 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
             return ErrorCode.PARAM_ERROR;
         }
 
-        return m_wtk_sdk_jni.HoldCall(callID, hold);
+        return mediaEngineJni.HoldCall(callID, hold);
     }
     @Override
     public int muteCall(String callID, int mute)
@@ -150,7 +210,7 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
             return ErrorCode.PARAM_ERROR;
         }
 
-        return m_wtk_sdk_jni.MuteCall(callID,mute);
+        return mediaEngineJni.MuteCall(callID,mute);
     }
     @Override
     public int setAudioOutput(int speaker)
@@ -203,16 +263,12 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
         //Before hangup, unmute
         WebRtcAudioRecord.setMicrophoneMute(false);
 
-        return m_wtk_sdk_jni.HangupCall(callID);
+        return mediaEngineJni.HangupCall(callID);
     }
     @Override
     public int setVideoDisplay(View localeDisplay, View remoteView)
     {
-        if(null == localeDisplay || null == remoteView)
-        {
-            return ErrorCode.PARAM_ERROR;
-        }
-        return m_wtk_sdk_jni.SetVideoDisplay(localeDisplay, remoteView);
+        return mediaEngineJni.SetVideoDisplay(localeDisplay, remoteView);
     }
     @Override
     public int startVideoSend(String callID)
@@ -221,7 +277,7 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
         {
             return ErrorCode.PARAM_ERROR;
         }
-        return m_wtk_sdk_jni.StartVideoSend(callID);
+        return mediaEngineJni.StartVideoSend(callID);
     }
     @Override
     public int stopVideoSend(String callID, int reason)
@@ -230,12 +286,12 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
         {
             return ErrorCode.PARAM_ERROR;
         }
-        return m_wtk_sdk_jni.StopVideoSend(callID,reason);
+        return mediaEngineJni.StopVideoSend(callID,reason);
     }
     @Override
     public int setCamera(int device)
     {
-        return m_wtk_sdk_jni.SetCamera(device);
+        return mediaEngineJni.SetCamera(device);
     }
     @Override
     public String makeOutboundCall(String dstID, String srcID, int media, String positionInfo, String rsInfo, String via)
@@ -251,7 +307,7 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
             {
                 positionInfo = "";
             }
-            String callID = m_wtk_sdk_jni.MakeOutboundCall(dstID, srcID, media, positionInfo, rsInfo, via);
+            String callID = mediaEngineJni.MakeOutboundCall(dstID, srcID, media, positionInfo, rsInfo, via);
             if(callID != null && callID.length() > 0)
             {
                 return callID;
@@ -277,7 +333,7 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
                 jaDstIDs.put(dstID);
             }
 
-            String retId = m_wtk_sdk_jni.JoinConference(jaDstIDs.toString(), groupID, media, srcID, confID);
+            String retId = mediaEngineJni.JoinConference(jaDstIDs.toString(), groupID, media, srcID, confID);
 
             if (retId != null && retId.length() > 0) {
                 return retId;
@@ -298,7 +354,7 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
         {
             return ErrorCode.PARAM_ERROR;
         }
-        return m_wtk_sdk_jni.HangupConference(confID);
+        return mediaEngineJni.HangupConference(confID);
     }
     @Override
     public int listConference(String confID)
@@ -307,7 +363,7 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
         {
             return ErrorCode.PARAM_ERROR;
         }
-        return m_wtk_sdk_jni.ListConference(confID);
+        return mediaEngineJni.ListConference(confID);
     }
     @Override
     public int ctrlConference(String confID, int action, String dstID)
@@ -318,22 +374,12 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
         }
         if(action == ConferenceCtrl.CONF_KICKOUT || action == ConferenceCtrl.CONF_MUTE || action == ConferenceCtrl.CONF_UNMUTE)
         {
-            return m_wtk_sdk_jni.CtrlConference(confID, action, dstID);
+            return mediaEngineJni.CtrlConference(confID, action, dstID);
         }
         else
         {
             return ErrorCode.PARAM_ERROR;
         }
-    }
-    @Override
-    public String getServerCallID(String callID)
-    {
-        if(null == callID || 0 == callID.length())
-        {
-            return null;
-        }
-
-        return m_wtk_sdk_jni.GetServerCallID(callID);
     }
     @Override
     public int getCallQualityLevel(String callID)
@@ -342,7 +388,7 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
         {
             return ErrorCode.PARAM_ERROR;
         }
-        return m_wtk_sdk_jni.GetCallQualityLevel(callID);
+        return mediaEngineJni.GetCallQualityLevel(callID);
     }
     //Impl MediaEngineSDK Event
     @Override
@@ -358,11 +404,126 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
             int media = jsonObject.optInt("media");
             int callType = jsonObject.optInt("callType");
 
-            m_WtkSdkEventListener.onReceiveCallEvent(callId, callerId, calleeId, callerName, media, callType);
+            mediaEngineListenerSDK.onReceiveCallEvent(callId, callerId, calleeId, callerName, media, callType);
         } catch (JSONException e) {
             e.printStackTrace();
         }
     }
+    @Override
+    public void onSendMessageEvent(String jsonString)
+    {
+        JSONObject jsonObject;
+        try {
+            jsonObject = new JSONObject(jsonString);
+
+            String msgId = jsonObject.optString("messageId");
+            int result = jsonObject.optInt("result");
+            long timestamp = jsonObject.optInt("timestamp");
+
+            mediaEngineListenerSDK.onSendMessageEvent(msgId, result,timestamp);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+    @Override
+    public void onReceiveMessageEvent(String jsonString)
+    {
+        JSONObject jsonObject;
+        try {
+            jsonObject = new JSONObject(jsonString);
+            int type = jsonObject.optInt("type");
+
+            switch (type) {
+                case MessageObjectType.MSG_OBJECT_TYPE_MMS:
+                {
+                    MessageOneToOne singleChatMsg;
+                    String mimeType = jsonObject.optString("mimeType");
+                    String srcId = jsonObject.optString("srcId");
+                    String textContent = jsonObject.optString("textContent");
+                    String messageID = jsonObject.optString("messageId");
+                    String fileName = jsonObject.optString("fileName");
+                    String mediaInfo = jsonObject.optString("mediaInfo");
+                    int createTime = jsonObject.optInt("createTime");
+                    int sessionType = jsonObject.optInt("sessionType");
+
+                    if (sessionType == 0) {
+                        singleChatMsg = new MessageOneToOne(MimeType.buildMimeType(mimeType), srcId, messageID, textContent, createTime, fileName, mediaInfo);
+                        mediaEngineListenerSDK.onReceiveMessageEvent(MessageObjectType.MSG_OBJECT_TYPE_MMS, singleChatMsg);
+                    }
+                }
+                break;
+                case MessageObjectType.MSG_OBJECT_TYPE_STATUS:
+                {
+                    int messageStatus = jsonObject.optInt("messageStatus");
+                    String messageID = jsonObject.optString("messageId");
+                    int createTime = jsonObject.optInt("createTime");
+
+                    if (MessageStatus.MSG_STATUS_RECEIVED == messageStatus) {
+                        MessageOfRec msgStateRec = new MessageOfRec((long) createTime);
+                        msgStateRec.setMessageId(messageID);
+//                        Log.e(TAG, "Impl->STATUS->singleChatMsg->onReceiveMessageEvent Peer Received");
+                        mediaEngineListenerSDK.onReceiveMessageEvent(MessageObjectType.MSG_OBJECT_TYPE_STATUS, msgStateRec);
+                    } else if (MessageStatus.MSG_STATUS_READED == messageStatus) {
+                        MessageOfRead msgStateRead = new MessageOfRead((long) createTime);
+                        msgStateRead.setMessageId(messageID);
+//                        Log.e(TAG, "Impl->STATUS->singleChatMsg->onReceiveMessageEvent Peer Read ed");
+                        mediaEngineListenerSDK.onReceiveMessageEvent(MessageObjectType.MSG_OBJECT_TYPE_STATUS, msgStateRead);
+                    }
+                }
+                break;
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+    @Override
+    public void onDownloadMessageAttachmentEvent(String jsonString)
+    {
+        JSONObject jsonObject;
+        try {
+            jsonObject = new JSONObject(jsonString);
+
+            String msgId = jsonObject.optString("messageId");
+            int result = jsonObject.optInt("result");
+            mediaEngineListenerSDK.onDownloadMessageAttachmentEvent(msgId, result);
+
+        } catch (JSONException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+    @Override
+    public void onUploadMessageAttachmentProgressEvent(String jsonString)
+    {
+        JSONObject jsonObject;
+        try {
+            jsonObject = new JSONObject(jsonString);
+
+            String msgId = jsonObject.optString("messageId");
+            int process = jsonObject.optInt("progress");
+            mediaEngineListenerSDK.onUploadMessageAttachmentProgressEvent(msgId, process);
+        } catch (JSONException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+    @Override
+    public void onDownloadMessageAttachmentProgressEvent(String jsonString)
+    {
+        JSONObject jsonObject;
+        try {
+            jsonObject = new JSONObject(jsonString);
+
+            String msgId = jsonObject.optString("messageId");
+            int process = jsonObject.optInt("progress");
+
+            mediaEngineListenerSDK.onDownloadMessageAttachmentProgressEvent(msgId, process);
+        } catch (JSONException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void onCallStateEvent(String JsonString)
     {
@@ -370,11 +531,11 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
         try {
             jsonObject = new JSONObject(JsonString);
 
-            String callId = jsonObject.optString("callID");
+            String callId = jsonObject.optString("callId");
             int state = jsonObject.optInt("state");
             int reason = jsonObject.optInt("reason");
 
-            m_WtkSdkEventListener.onCallStateEvent(callId, state, reason);
+            mediaEngineListenerSDK.onCallStateEvent(callId, state, reason);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -389,7 +550,7 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
             String callId = jsonObject.optString("callId");
             int state = jsonObject.optInt("state") ;
 
-            m_WtkSdkEventListener.onRemoteVideoStateEvent(callId, state);
+            mediaEngineListenerSDK.onRemoteVideoStateEvent(callId, state);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -406,7 +567,7 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
             int state = jsonObject.optInt("state");
             int reason = jsonObject.optInt("reason");
 
-            m_WtkSdkEventListener.onConferenceStateEvent(conferenceId, callId, callerId, state, reason);
+            mediaEngineListenerSDK.onConferenceStateEvent(conferenceId, callId, callerId, state, reason);
         } catch (JSONException e) {
             e.printStackTrace();
         }
@@ -421,26 +582,20 @@ public class MediaEngineSDKImpl extends MediaEngineSDK implements MediaEngineLis
             String callerId = jsonObject.optString("callerId");
             String listInfo = jsonObject.optString("listInfo");
 
-            m_WtkSdkEventListener.onConferenceVadListEvent(conferenceId, callerId, listInfo);
+            mediaEngineListenerSDK.onConferenceVadListEvent(conferenceId, callerId, listInfo);
         } catch (JSONException e) {
             e.printStackTrace();
         }
     }
     @Override
-    public void onSendSignal(String JsonString)
+    public void onSystemEvent(String JsonString)
     {
         JSONObject jsonObject;
         try {
             jsonObject = new JSONObject(JsonString);
-            String targetId = jsonObject.optString("targetId");
-            String isConf = jsonObject.optString("isConfEvent");
-            String srcID= jsonObject.optString("srcID");
-            String jsonContent = jsonObject.optString("jsonContent");
-            String signalType = jsonObject.optString("signalType");
-            String signalCause = jsonObject.optString("signalCause");
-            String coreServerCallID = jsonObject.optString("coreServerCallID");
+            int type = jsonObject.optInt("eventType");
 
-            m_WtkSdkEventListener.onSendSignal(targetId, isConf, srcID, jsonContent, signalType,signalCause,coreServerCallID);
+            mediaEngineListenerSDK.onSystemEvent(type);
         } catch (JSONException e) {
             e.printStackTrace();
         }

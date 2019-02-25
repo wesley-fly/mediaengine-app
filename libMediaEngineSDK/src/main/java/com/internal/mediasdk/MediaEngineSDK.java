@@ -5,23 +5,31 @@ import com.internal.mediasdkimpl.MediaEngineSDKImpl;
 import android.content.Context;
 import android.view.View;
 
+import java.util.Map;
+
 public abstract class MediaEngineSDK {
     public static MediaEngineSDK getInstance()
     {
         return MediaEngineSDKImpl.getInstance();
     }
 
-    public abstract boolean initialize(Context context, String AppKey, EventListener listener);
+    public abstract boolean initialize(Context context, String AppKey, MediaEngineListenerSDK listener);
+
+    public abstract int deBindAppAccount();
 
     public abstract String bindAppAccount(String appId);
+
+    public abstract String queryIdByAppAccount(String appAccountId);
 
     public abstract int setParameter(String key, String value);
 
     public abstract String getParameter(String key);
 
-    public abstract int receiveCallNotification(String callNotification);
+    public abstract String sendMessage(String dstId, String mimeType, String textContent, String filePath, String messageId);
 
-    public abstract void setUserProfile(String profile, String jsonRS);
+    public abstract String downloadMessageAttachment(String messageId, int isThumbnail, String filePath);
+
+    public abstract String reportMessageStatus(String dstId, String messageId, int status);
 
     public abstract String makeCall(String dstId, String srcId, int media);
 
@@ -54,8 +62,6 @@ public abstract class MediaEngineSDK {
     public abstract int listConference(String confId);
 
     public abstract int ctrlConference(String confId, int action, String dstId);
-
-    public abstract String getServerCallID(String callId);
 
     public abstract int getCallQualityLevel(String callId);
 }
